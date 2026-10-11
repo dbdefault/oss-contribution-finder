@@ -199,15 +199,21 @@ def check_contributor_friendly(
     use_cache: bool = True,
     cache_ttl: float | None = None,
     timeout: float | None = None,
-) -> dict[str, bool | None]:
-    """Detect root CONTRIBUTING.md and templates; None means an API error."""
+) -> dict[str, Any]:
+    """Detect contributor-friendly signals and compute a 0-100 score.
+
+    Returns dict with boolean flags (or None on API error) and a 'score' integer.
+    Score weights: CONTRIBUTING.md=30, PR template=25, issue templates=25, CoC=20.
+    """
     base = f"{GITHUB_API}/repos/{full_name}/contents"
     kwargs: dict[str, Any] = {"token": token, "use_cache": use_cache}
     if cache_ttl is not None:
         kwargs["cache_ttl"] = cache_ttl
     if timeout is not None:
         kwargs["timeout"] = timeout
+
     contributing = api_request(f"{base}/CONTRIBUTING.md", **kwargs)
+    coc = api_request(f"{base}/CODE_OF_CONDUCT.md", **kwargs)
     github = api_request(f"{base}/.github", **kwargs)
 
     def present(response: dict | list, kind: str) -> bool | None:
@@ -216,6 +222,8 @@ def check_contributor_friendly(
         return isinstance(response, dict) and response.get("type") == kind
 
     has_contributing = present(contributing, "file")
+    has_coc = present(coc, "file")
+
     if isinstance(github, list):
         has_pr_template = any(
             isinstance(entry, dict)
@@ -235,10 +243,23 @@ def check_contributor_friendly(
         error = github.get("error") if isinstance(github, dict) else None
         has_pr_template = has_issue_template = False if error == 404 else None
 
+    # Score only from known True values; None or False contribute 0
+    score = 0
+    if has_contributing is True:
+        score += 30
+    if has_pr_template is True:
+        score += 25
+    if has_issue_template is True:
+        score += 25
+    if has_coc is True:
+        score += 20
+
     return {
         "has_contributing": has_contributing,
         "has_pr_template": has_pr_template,
         "has_issue_template": has_issue_template,
+        "has_code_of_conduct": has_coc,
+        "score": score,
     }
 
 
@@ -301,6 +322,8 @@ def format_markdown(opportunities: list[dict]) -> str:
         lines.append(f"- **Labels**: {', '.join(labels)}")
         lines.append(f"- **Stars**: ⭐ {repo.get('stargazers_count', '?')}")
         lines.append(f"- **Language**: {repo.get('language', 'Unknown')}")
+        if "friendliness_score" in opp:
+            lines.append(f"- **Friendliness score**: {opp['friendliness_score']}/100")
         if "contributor_friendly" in opp:
             lines.append(f"- **Contributor-friendly**: {'Yes' if opp['contributor_friendly'] else 'No'}")
         lines.append(f"- **Updated**: {opp.get('updated_at', '?')[:10]}")
@@ -329,7 +352,9 @@ def format_table(opportunities: list[dict]) -> str:
         stars = repo.get("stargazers_count", 0)
         title = opp["title"][:47] + "..." if len(opp["title"]) > 50 else opp["title"]
         friendly = "?"
-        if "contributor_friendly" in opp:
+        if "friendliness_score" in opp:
+            friendly = str(opp["friendliness_score"])
+        elif "contributor_friendly" in opp:
             friendly = "Yes" if opp["contributor_friendly"] else "No"
         lines.append(f"{i:>3} {repo_name:<40} {stars:>6} {title:<50} {friendly:<8}")
 
@@ -412,7 +437,7 @@ Examples:
     )
     parser.add_argument(
         "--sort",
-        choices=["comments", "reactions", "updated"],
+        choices=["comments", "reactions", "updated", "friendliness"],
         default="updated",
         help="Sort field (default: updated)",
     )
@@ -547,9 +572,14 @@ def main():
             print(f"Warning: contributor signals could not be fully checked for {full_name}", file=sys.stderr)
         if args.require_contributing and signals["has_contributing"] is not True:
             continue
-        item["contributor_friendly"] = any(value is True for value in signals.values())
+        item["contributor_friendly"] = any(value is True for value in [signals.get(k) for k in ["has_contributing", "has_pr_template", "has_issue_template"]])
+        item["friendliness_score"] = signals.get("score", 0)
+        item["contributor_signals"] = {k: signals.get(k) for k in ["has_contributing", "has_pr_template", "has_issue_template", "has_code_of_conduct"]}
         filtered.append(item)
     items = filtered
+
+    if args.sort == "friendliness":
+        items.sort(key=lambda x: x.get("friendliness_score", 0), reverse=True)
 
     # Format output
     formatters = {

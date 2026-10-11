@@ -441,55 +441,93 @@ def test_contributor_signals_from_github_contents():
         {"name": "PULL_REQUEST_TEMPLATE.md", "type": "file"},
         {"name": "ISSUE_TEMPLATE", "type": "dir"},
     ]
-    with patch("oss_contribution_finder.api_request", side_effect=[{"type": "file"}, entries]) as api:
+    with patch("oss_contribution_finder.api_request", side_effect=[{"type": "file"}, {"error": 404}, entries]) as api:
         result = check_contributor_friendly("owner/repo")
     assert result == {"has_contributing": True, "has_pr_template": True,
-                      "has_issue_template": True}
-    assert api.call_count == 2
+                      "has_issue_template": True, "has_code_of_conduct": False, "score": 80}
+    assert api.call_count == 3
     assert api.call_args_list[0].args[0].endswith("/repos/owner/repo/contents/CONTRIBUTING.md")
-    assert api.call_args_list[1].args[0].endswith("/repos/owner/repo/contents/.github")
+    assert api.call_args_list[1].args[0].endswith("/repos/owner/repo/contents/CODE_OF_CONDUCT.md")
+    assert api.call_args_list[2].args[0].endswith("/repos/owner/repo/contents/.github")
 
 
 def test_pr_template_directory_counts_without_single_file():
     with patch("oss_contribution_finder.api_request", side_effect=[
-        {"error": 404}, [{"name": "PULL_REQUEST_TEMPLATE", "type": "dir"}]
+        {"error": 404}, {"error": 404}, [{"name": "PULL_REQUEST_TEMPLATE", "type": "dir"}]
     ]):
         assert check_contributor_friendly("owner/repo") == {
             "has_contributing": False, "has_pr_template": True, "has_issue_template": False,
+            "has_code_of_conduct": False, "score": 25,
         }
 
 
 def test_missing_github_directory_has_no_signals():
     with patch("oss_contribution_finder.api_request", side_effect=[
-        {"error": 404}, {"error": 404}
+        {"error": 404}, {"error": 404}, {"error": 404}
     ]):
         assert check_contributor_friendly("owner/repo") == {
             "has_contributing": False, "has_pr_template": False, "has_issue_template": False,
+            "has_code_of_conduct": False, "score": 0,
         }
 
 
 def test_contents_error_is_not_treated_as_missing():
     with patch("oss_contribution_finder.api_request", side_effect=[
-        {"error": 403, "rate_limited": True}, {"error": 404}
+        {"error": 403, "rate_limited": True}, {"error": 404}, {"error": 404}
     ]):
         assert check_contributor_friendly("owner/repo")["has_contributing"] is None
 
 
 def test_wrong_contents_types_do_not_count_as_templates():
     with patch("oss_contribution_finder.api_request", side_effect=[
-        {"type": "dir"}, [
+        {"type": "dir"}, {"error": 404}, [
             {"name": "PULL_REQUEST_TEMPLATE.md", "type": "dir"},
             {"name": "ISSUE_TEMPLATE", "type": "file"},
         ]
     ]):
         assert check_contributor_friendly("owner/repo") == {
             "has_contributing": False, "has_pr_template": False, "has_issue_template": False,
+            "has_code_of_conduct": False, "score": 0,
         }
+
+
+def test_code_of_conduct_present_completes_the_score():
+    """All four signals present: 30 + 25 + 25 + 20 = 100, and CoC is reported."""
+    with patch("oss_contribution_finder.api_request", side_effect=[
+        {"type": "file"}, {"type": "file"},
+        [{"name": "PULL_REQUEST_TEMPLATE.md", "type": "file"},
+         {"name": "ISSUE_TEMPLATE", "type": "dir"}],
+    ]):
+        result = check_contributor_friendly("owner/repo")
+    assert result == {"has_contributing": True, "has_pr_template": True,
+                      "has_issue_template": True, "has_code_of_conduct": True, "score": 100}
+
+
+def test_score_is_reported_and_sortable(capsys):
+    """--sort friendliness ranks by score and every item carries the breakdown."""
+    items = [{"title": "Low", "repository_url": "https://api.github.com/repos/a/low"},
+             {"title": "High", "repository_url": "https://api.github.com/repos/a/high"}]
+    with patch("sys.argv", ["finder", "--no-enrich", "--sort", "friendliness", "--format", "json"]), \
+         patch("oss_contribution_finder.get_token", return_value=None), \
+         patch("oss_contribution_finder.search_issues", return_value={"items": items}), \
+         patch("oss_contribution_finder.api_request", side_effect=[
+             {"error": 404}, {"error": 404}, {"error": 404},
+             {"type": "file"}, {"type": "file"},
+             [{"name": "PULL_REQUEST_TEMPLATE.md", "type": "file"},
+              {"name": "ISSUE_TEMPLATE", "type": "dir"}],
+         ]):
+        from oss_contribution_finder import main
+        main()
+    out = json.loads(capsys.readouterr().out)
+    assert [item["title"] for item in out] == ["High", "Low"]
+    assert out[0]["friendliness_score"] == 100
+    assert out[0]["contributor_signals"]["has_code_of_conduct"] is True
+    assert out[1]["friendliness_score"] == 0
 
 
 def test_contributor_check_passes_token_and_cache_choice():
     with patch("oss_contribution_finder.api_request", side_effect=[
-        {"error": 404}, {"error": 404}
+        {"error": 404}, {"error": 404}, {"error": 404}
     ]) as api:
         check_contributor_friendly("owner/repo", token="secret", use_cache=False)
     assert all(call.kwargs == {"token": "secret", "use_cache": False}
@@ -503,12 +541,12 @@ def test_cli_detects_signals_and_reuses_checks_for_same_repo(capsys):
          patch("oss_contribution_finder.get_token", return_value=None), \
          patch("oss_contribution_finder.search_issues", return_value={"items": items}), \
          patch("oss_contribution_finder.api_request", side_effect=[
-             {"error": 404}, [{"name": "ISSUE_TEMPLATE", "type": "dir"}]
+             {"error": 404}, {"error": 404}, [{"name": "ISSUE_TEMPLATE", "type": "dir"}]
          ]) as api:
         from oss_contribution_finder import main
         main()
     assert [item["contributor_friendly"] for item in json.loads(capsys.readouterr().out)] == [True, True]
-    assert api.call_count == 2
+    assert api.call_count == 3
 
 
 def test_cli_require_contributing_filters_even_with_no_enrich(capsys):
@@ -519,14 +557,14 @@ def test_cli_require_contributing_filters_even_with_no_enrich(capsys):
          patch("oss_contribution_finder.get_token", return_value=None), \
          patch("oss_contribution_finder.search_issues", return_value={"items": items}), \
          patch("oss_contribution_finder.api_request", side_effect=[
-             {"type": "file"}, {"error": 404}, {"error": 404}, {"error": 404}
+             {"type": "file"}, {"error": 404}, {"error": 404}, {"error": 404}, {"error": 404}, {"error": 404}
          ]) as api:
         from oss_contribution_finder import main
         main()
     output = json.loads(capsys.readouterr().out)
     assert [item["title"] for item in output] == ["Keep"]
     assert output[0]["contributor_friendly"] is True
-    assert api.call_count == 4
+    assert api.call_count == 6
 
 
 def test_cli_without_filter_keeps_missing_repos(capsys):
@@ -534,7 +572,7 @@ def test_cli_without_filter_keeps_missing_repos(capsys):
     with patch("sys.argv", ["finder", "--no-enrich", "--format", "json"]), \
          patch("oss_contribution_finder.get_token", return_value=None), \
          patch("oss_contribution_finder.search_issues", return_value={"items": [item]}), \
-         patch("oss_contribution_finder.api_request", side_effect=[{"error": 404}, {"error": 404}]):
+         patch("oss_contribution_finder.api_request", side_effect=[{"error": 404}, {"error": 404}, {"error": 404}]):
         from oss_contribution_finder import main
         main()
     assert json.loads(capsys.readouterr().out)[0]["contributor_friendly"] is False
@@ -546,7 +584,7 @@ def test_cli_api_error_warns_and_does_not_pass_filter(capsys):
          patch("oss_contribution_finder.get_token", return_value=None), \
          patch("oss_contribution_finder.search_issues", return_value={"items": [item]}), \
          patch("oss_contribution_finder.api_request", side_effect=[
-             {"error": 403}, {"error": 404}
+             {"error": 403}, {"error": 404}, {"error": 404}
          ]):
         from oss_contribution_finder import main
         main()

@@ -7,6 +7,10 @@ Find open-source contribution opportunities via the GitHub API.
 
 Searches for issues labeled "good first issue" (or any label you choose), filtered by language, topic, star count, and activity. Outputs a ranked list ready for contribution.
 
+## Contributor Friendliness
+
+The tool detects signals of contributor-friendly repositories (CONTRIBUTING.md, PR/issue templates, CODE_OF_CONDUCT.md) and assigns a friendliness score (0-100). Use `--sort friendliness` to rank by this score. The score is shown in table and markdown output, and the breakdown is included in JSON.
+
 ## Install
 
 ```bash
