@@ -18,6 +18,17 @@ pip install git+https://github.com/yunaremaia/oss-contribution-finder.git
 ```
 
 > **Not yet on PyPI.** Install from git with the line above. A PyPI release is
+
+## Quick Start (5 min)
+
+```bash
+# Install from git (PyPI pending)
+pip install git+https://github.com/yunaremaia/oss-contribution-finder.git
+
+# Find Python good-first-issues
+oss-contribution-finder --language python --limit 10
+```
+
 > pending; the distribution name `oss-contribution-finder` is currently free.
 
 ## Usage
