@@ -46,7 +46,20 @@ def get_token() -> str | None:
 
 
 def get_opener() -> urllib.request.OpenerDirector:
-    """Build a urllib opener configured with ProxyHandler respecting proxy env vars."""
+    """Build a urllib opener configured with ProxyHandler respecting proxy env vars.
+
+    Known limitation (filed, not fixed): the handler snapshots ``getproxies()``
+    at construction and is installed process-wide, so a later call that does not
+    re-run this keeps the proxies of whoever built it first. ``patch.dict`` and
+    ``monkeypatch.setenv`` restore the environment but not an already-installed
+    handler, so tests that set a proxy and tear it down can leave
+    ``urllib.request._opener`` pointing at a dead port -- observed as
+    ``Connection refused`` in a suite that otherwise patches ``urlopen``.
+    Fixing it properly means either passing the opener per request (breaking the
+    suite's three ``patch("urllib.request.urlopen")`` seams) or making the
+    handler re-read the environment per request. Not done here: a silent
+    behaviour change in a proxy path is worse than a documented one.
+    """
     proxies = urllib.request.getproxies()
     proxy_handler = urllib.request.ProxyHandler(proxies) if proxies else urllib.request.ProxyHandler()
     opener = urllib.request.build_opener(proxy_handler)
