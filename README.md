@@ -11,25 +11,15 @@ Searches for issues labeled "good first issue" (or any label you choose), filter
 
 The tool detects signals of contributor-friendly repositories (CONTRIBUTING.md, PR/issue templates, CODE_OF_CONDUCT.md) and assigns a friendliness score (0-100). Use `--sort friendliness` to rank by this score. The score is shown in table and markdown output, and the breakdown is included in JSON.
 
-## Install
+## Install & Quick Start
 
 ```bash
-pip install git+https://github.com/yunaremaia/oss-contribution-finder.git
-```
-
-> **Not yet on PyPI.** Install from git with the line above. A PyPI release is
-
-## Quick Start (5 min)
-
-```bash
-# Install from git (PyPI pending)
+# Install from git (not yet on PyPI)
 pip install git+https://github.com/yunaremaia/oss-contribution-finder.git
 
 # Find Python good-first-issues
 oss-contribution-finder --language python --limit 10
 ```
-
-> pending; the distribution name `oss-contribution-finder` is currently free.
 
 ## Usage
 
