@@ -131,7 +131,7 @@ def api_request(
                 }
 
             return {"error": e.code, "message": raw_body}
-        except Exception as e:
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
             if attempt < retries - 1:
                 time.sleep(float(2 ** attempt))
                 continue
@@ -612,3 +612,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
