@@ -1,5 +1,5 @@
 # OSS Contribution Finder
-[![CI](https://github.com/yunaremaia/oss-contribution-finder/actions/workflows/ci.yml/badge.svg)](https://github.com/yunaremaia/oss-contribution-finder/actions) ![py](https://img.shields.io/badge/python-3.10-blue.svg) ![release](https://img.shields.io/github/v/release/yunaremaia/oss-contribution-finder)
+[![CI](https://github.com/yunaremaia/oss-contribution-finder/actions/workflows/ci.yml/badge.svg)](https://github.com/yunaremaia/oss-contribution-finder/actions) [![PyPI](https://img.shields.io/pypi/v/oss-contribution-finder)](https://pypi.org/project/oss-contribution-finder/) [![Downloads](https://img.shields.io/pypi/dm/oss-contribution-finder)](https://pypi.org/project/oss-contribution-finder/) ![py](https://img.shields.io/badge/python-3.10-blue.svg) ![release](https://img.shields.io/github/v/release/yunaremaia/oss-contribution-finder)
 [![License](https://img.shields.io/github/license/yunaremaia/oss-contribution-finder) ![Stars](https://img.shields.io/github/stars/yunaremaia/oss-contribution-finder)](https://github.com/yunaremaia/oss-contribution-finder/blob/main/LICENSE)
 
 
