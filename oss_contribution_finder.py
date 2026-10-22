@@ -536,6 +536,9 @@ def main():
 
     per_page = args.per_page if args.per_page is not None else min(args.limit, 100)
     labels = args.label if args.label else ["good first issue"]
+    # GitHub Search Issues rejects "friendliness"; map to a valid API sort and
+    # keep local friendliness ranking after fetch (#78).
+    api_sort = "updated" if args.sort == "friendliness" else args.sort
     result = search_issues(
         labels=labels,
         language=args.language,
@@ -543,7 +546,7 @@ def main():
         min_stars=args.min_stars,
         created_after=args.created_after,
         updated_after=args.updated_after,
-        sort=args.sort,
+        sort=api_sort,
         per_page=per_page,
         page=args.page,
         token=token,
